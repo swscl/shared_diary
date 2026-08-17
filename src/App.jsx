@@ -161,7 +161,7 @@ export default function App() {
   if (!user) {
     return (
       <div style={cardStyle}>
-        <h2>双人手账 - 登录 / 注册</h2>
+        <h2>心之田 - 登录 / 注册</h2>
         <input 
           placeholder="邮箱" 
           value={email} 
@@ -188,7 +188,7 @@ export default function App() {
     return (
       <div style={cardStyle}>
         <h3>欢迎你，{user.email}！</h3>
-        <p>你还没有与另一半绑定双人空间哦：</p>
+        <p>你还没有与另一半绑定心之田空间哦：</p>
         
         <div style={{ borderTop: '1px solid #ccc', paddingTop: 15, marginTop: 15 }}>
           <h4>方式 A：我是发起人</h4>
@@ -215,7 +215,7 @@ export default function App() {
   return (
     <div style={{ padding: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>💕 我们的共享双人手账</h2>
+        <h2>💕 我们的心之田 </h2>
         <button onClick={handleLogout} style={{ background: '#9e9e9e', ...btnStyle }}>退出登录</button>
       </div>
 
@@ -243,7 +243,7 @@ export default function App() {
 
       {/* Fabric.js 手账画板区域 */}
       <div style={{ border: '2px dashed #ffb6c1', padding: 20, textAlign: 'center', backgroundColor: '#fdfbf7' }}>
-        <h3>[ 这里就是你们的手账画板区域 ]</h3>
+        <h3>[ 记录区域 ]</h3>
         <p>已自动连接至空间：{space.id}</p>
       </div>
     </div>
