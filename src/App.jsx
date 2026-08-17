@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 
 export default function App() {
@@ -8,18 +8,38 @@ export default function App() {
   const [space, setSpace] = useState(null);
   const [inviteInput, setInviteInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const saveTimer = useRef(null);
 
-// 1. 初始化检查登录状态与绑定状态（带超时保护，防止手机端死锁卡在“加载中”）
+  // 1. 初始化检查登录状态与绑定状态
   useEffect(() => {
-    // 设置 3 秒超时保底，防止手机浏览器阻断回调导致一直卡在加载页
     const timer = setTimeout(() => {
       setLoading(false);
     }, 3000);
-
     checkUserAndSpace().finally(() => {
       clearTimeout(timer);
     });
   }, []);
+
+  // 2. 实时监听空间变化（对方打字时立刻同步过来）
+  useEffect(() => {
+    if (!space) return;
+
+    const channel = supabase
+      .channel(`space_${space.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'spaces',
+        filter: `id=eq.${space.id}`
+      }, (payload) => {
+        setSpace(payload.new);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [space?.id]);
 
   async function checkUserAndSpace() {
     try {
@@ -36,20 +56,18 @@ export default function App() {
     }
   }
 
-  // 查询用户是否已经拥有共享空间
   async function fetchUserSpace(userId) {
     const { data, error } = await supabase
       .from('spaces')
       .select('*')
       .or(`user_1.eq.${userId},user_2.eq.${userId}`)
       .single();
-
     if (data) {
       setSpace(data);
     }
   }
 
-  // 2. 账号注册 / 登录
+  // 3. 账号注册 / 登录
   async function handleAuth(type) {
     let result;
     if (type === 'signup') {
@@ -57,7 +75,6 @@ export default function App() {
     } else {
       result = await supabase.auth.signInWithPassword({ email, password });
     }
-
     if (result.error) {
       alert(result.error.message);
     } else if (result.data.user) {
@@ -66,7 +83,7 @@ export default function App() {
     }
   }
 
-  // 3. 用户 A：创建新的共享空间并生成邀请码
+  // 4. 创建共享空间
   async function createSpace() {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     const { data, error } = await supabase
@@ -74,53 +91,44 @@ export default function App() {
       .insert([{ invite_code: code, user_1: user.id }])
       .select()
       .single();
-
     if (error) alert(error.message);
     else setSpace(data);
   }
 
-  // 用户 B：输入邀请码进行双人绑定
+  // 5. 加入共享空间
   async function joinSpace() {
-    // 自动去除输入内容的前后空格并转大写
     const cleanCode = inviteInput.trim().toUpperCase();
-
     if (!cleanCode) return alert('请输入邀请码！');
 
-    // 1. 查找到对应邀请码的空间
     const { data: targetSpace, error: findError } = await supabase
       .from('spaces')
       .select('*')
       .eq('invite_code', cleanCode)
-      .maybeSingle(); // 使用 maybeSingle 避免找不到时抛出异常错误
+      .maybeSingle();
 
     if (findError) {
       alert('查询出错：' + findError.message);
       return;
     }
-
     if (!targetSpace) {
       alert('未找到该邀请码，请检查是否输入正确！');
       return;
     }
-
     if (targetSpace.user_1 === user.id) {
       alert('不能使用自己生成的邀请码！');
       return;
     }
-
     if (targetSpace.user_2) {
       alert('该邀请码已被其他人绑定使用！');
       return;
     }
 
-    // 2. 将用户 B 的 ID 填入 user_2 字段进行绑定
     const { data, error } = await supabase
       .from('spaces')
       .update({ user_2: user.id })
       .eq('id', targetSpace.id)
       .select()
       .single();
-
     if (error) {
       alert('加入空间失败：' + error.message);
     } else {
@@ -129,23 +137,39 @@ export default function App() {
     }
   }
 
-  // 5. 【新增】取消邀请：作废邀请码并返回上一步
+  // 6. 取消邀请
   async function cancelSpace() {
     if (!space) return;
-
     const confirmCancel = window.confirm('确定要取消邀请吗？取消后邀请码将作废，你可以重新创建或输入别人的邀请码。');
     if (!confirmCancel) return;
-
     const { error } = await supabase
       .from('spaces')
       .delete()
       .eq('id', space.id);
-
     if (error) {
       alert('取消失败：' + error.message);
     } else {
-      setSpace(null); // 清空本地 space 状态，页面会自动跳回上一个选择界面
+      setSpace(null);
     }
+  }
+
+  // 7. 【新增】自动保存内容（输入后停顿0.5秒自动保存）
+  function handleContentChange(newContent) {
+    const isUser1 = space.user_1 === user.id;
+    const field = isUser1 ? 'content_left' : 'content_right';
+
+    // 先更新本地显示
+    setSpace({ ...space, [field]: newContent });
+
+    // 防抖保存：停止输入 500ms 后才真正写入数据库
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      const { error } = await supabase
+        .from('spaces')
+        .update({ [field]: newContent })
+        .eq('id', space.id);
+      if (error) console.error('保存失败:', error);
+    }, 500);
   }
 
   // 退出登录
@@ -157,23 +181,23 @@ export default function App() {
 
   if (loading) return <div style={{ padding: 20 }}>加载中...</div>;
 
-  // 界面 1：未登录界面
+  // 界面 1：未登录
   if (!user) {
     return (
       <div style={cardStyle}>
-        <h2>心之田 - 登录 / 注册</h2>
-        <input 
-          placeholder="邮箱" 
-          value={email} 
-          onChange={e => setEmail(e.target.value)} 
-          style={inputStyle} 
+        <h2>双人手账 - 登录 / 注册</h2>
+        <input
+          placeholder="邮箱"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          style={inputStyle}
         />
-        <input 
-          type="password" 
-          placeholder="密码" 
-          value={password} 
-          onChange={e => setPassword(e.target.value)} 
-          style={inputStyle} 
+        <input
+          type="password"
+          placeholder="密码"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          style={inputStyle}
         />
         <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
           <button onClick={() => handleAuth('login')} style={btnStyle}>登录</button>
@@ -183,68 +207,117 @@ export default function App() {
     );
   }
 
-  // 界面 2：已登录但未绑定对方（上一个选择界面）
+  // 界面 2：已登录但未绑定
   if (!space) {
     return (
       <div style={cardStyle}>
         <h3>欢迎你，{user.email}！</h3>
-        <p>你还没有与另一半绑定心之田空间哦：</p>
-        
+        <p>你还没有与另一半绑定双人空间哦：</p>
+
         <div style={{ borderTop: '1px solid #ccc', paddingTop: 15, marginTop: 15 }}>
           <h4>方式 A：我是发起人</h4>
           <button onClick={createSpace} style={btnStyle}>生成专属邀请码</button>
         </div>
-
         <div style={{ borderTop: '1px solid #ccc', paddingTop: 15, marginTop: 15 }}>
           <h4>方式 B：我有对方的邀请码</h4>
-          <input 
-            placeholder="输入6位邀请码" 
-            value={inviteInput} 
-            onChange={e => setInviteInput(e.target.value)} 
-            style={inputStyle} 
+          <input
+            placeholder="输入6位邀请码"
+            value={inviteInput}
+            onChange={e => setInviteInput(e.target.value)}
+            style={inputStyle}
           />
           <button onClick={joinSpace} style={{...btnStyle, backgroundColor: '#2196F3'}}>加入对方的空间</button>
         </div>
-
         <button onClick={handleLogout} style={{ marginTop: 20, background: '#9e9e9e', ...btnStyle }}>退出登录</button>
       </div>
     );
   }
 
-  // 界面 3：空间管理与手账区域
+  // 判断当前用户是左边还是右边
+  const isUser1 = space.user_1 === user.id;
+  const myContent = isUser1 ? (space.content_left || '') : (space.content_right || '');
+  const partnerContent = isUser1 ? (space.content_right || '') : (space.content_left || '');
+
+  // 界面 3：已绑定 - 左右分栏文档
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>💕 我们的心之田 </h2>
+    <div style={{ padding: 20, height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+        <h2 style={{ margin: 0 }}>💕 我们的共享双人手账</h2>
         <button onClick={handleLogout} style={{ background: '#9e9e9e', ...btnStyle }}>退出登录</button>
       </div>
 
-      <div style={{ backgroundColor: '#fff3f8', padding: 15, borderRadius: 8, marginBottom: 20 }}>
-        <p><b>空间 ID：</b>{space.id}</p>
-        
-        {/* 如果没绑定 user_2，显示邀请码和取消按钮 */}
-        {!space.user_2 ? (
-          <div>
-            <p><b>你的邀请码：</b><span style={{ color: '#e91e63', fontWeight: 'bold', fontSize: 18 }}>{space.invite_code}</span></p>
-            <p><b>绑定状态：</b>⏳ 正在等待对方输入邀请码加入...</p>
-            
-            {/* 取消邀请按钮 */}
-            <button 
-              onClick={cancelSpace} 
-              style={{ ...btnStyle, backgroundColor: '#f44336', marginTop: 10 }}
-            >
-              取消邀请 / 作废邀请码
-            </button>
-          </div>
-        ) : (
-          <p><b>绑定状态：</b>✅ 已完成双人绑定！两人可以共同编辑手账了。</p>
-        )}
-      </div>
+      {!space.user_2 ? (
+        <div style={{ backgroundColor: '#fff3f8', padding: 15, borderRadius: 8, marginBottom: 15 }}>
+          <p><b>你的邀请码：</b><span style={{ color: '#e91e63', fontWeight: 'bold', fontSize: 18 }}>{space.invite_code}</span></p>
+          <p><b>绑定状态：</b>⏳ 正在等待对方输入邀请码加入...</p>
+          <button
+            onClick={cancelSpace}
+            style={{ ...btnStyle, backgroundColor: '#f44336' }}
+          >
+            取消邀请 / 作废邀请码
+          </button>
+        </div>
+      ) : null}
 
-      {/* Fabric.js 手账画板区域 */}
-      <div style={{ border: '2px dashed #ffb6c1', padding: 20, textAlign: 'center', backgroundColor: '#fdfbf7' }}>
-        <h3>[ 记录区域 ]</h3>
-        <p>已自动连接至空间：{space.id}</p>
+      {/* 左右分栏文档区域 */}
+      <div style={{ display: 'flex', gap: '15px', flex: 1, minHeight: 0 }}>
+        {/* 左边：我的编辑区 */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{
+            backgroundColor: '#e3f2fd',
+            padding: '10px 15px',
+            borderRadius: '8px 8px 0 0',
+            fontWeight: 'bold',
+            color: '#1976d2'
+          }}>
+            ✏️ 我的区域
+          </div>
+          <textarea
+            value={myContent}
+            onChange={e => handleContentChange(e.target.value)}
+            placeholder="在这里写下你想说的话..."
+            style={{
+              flex: 1,
+              padding: '15px',
+              fontSize: '16px',
+              border: '2px solid #90caf9',
+              borderTop: 'none',
+              borderRadius: '0 0 8px 8px',
+              resize: 'none',
+              outline: 'none',
+              fontFamily: 'inherit',
+              lineHeight: '1.6'
+            }}
+          />
+        </div>
+
+        {/* 右边：对方的区域（只读） */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{
+            backgroundColor: '#fce4ec',
+            padding: '10px 15px',
+            borderRadius: '8px 8px 0 0',
+            fontWeight: 'bold',
+            color: '#c2185b'
+          }}>
+            💌 对方的区域
+          </div>
+          <div style={{
+            flex: 1,
+            padding: '15px',
+            fontSize: '16px',
+            border: '2px solid #f48fb1',
+            borderTop: 'none',
+            borderRadius: '0 0 8px 8px',
+            backgroundColor: '#fffafa',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowY: 'auto',
+            lineHeight: '1.6'
+          }}>
+            {partnerContent || <span style={{ color: '#ccc' }}>对方还没有写内容...</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
