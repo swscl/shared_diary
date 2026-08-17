@@ -9,19 +9,31 @@ export default function App() {
   const [inviteInput, setInviteInput] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // 1. 初始化检查登录状态与绑定状态
+// 1. 初始化检查登录状态与绑定状态（带超时保护，防止手机端死锁卡在“加载中”）
   useEffect(() => {
-    checkUserAndSpace();
+    // 设置 3 秒超时保底，防止手机浏览器阻断回调导致一直卡在加载页
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
+
+    checkUserAndSpace().finally(() => {
+      clearTimeout(timer);
+    });
   }, []);
 
   async function checkUserAndSpace() {
-    setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      setUser(session.user);
-      await fetchUserSpace(session.user.id);
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        await fetchUserSpace(session.user.id);
+      }
+    } catch (err) {
+      console.error('初始化登录检查失败:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // 查询用户是否已经拥有共享空间
