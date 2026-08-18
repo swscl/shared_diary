@@ -8,7 +8,10 @@ export default function App() {
   const [space, setSpace] = useState(null);
   const [inviteInput, setInviteInput] = useState('');
   const [loading, setLoading] = useState(true);
-  const saveTimer = useRef(null);
+  const [myContent, setMyContent] = useState('');
+  const [partnerContent, setPartnerContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 1. 初始化检查登录状态与绑定状态
   useEffect(() => {
@@ -20,25 +23,13 @@ export default function App() {
     });
   }, []);
 
-  // 2. 实时监听空间变化（对方打字时立刻同步过来）
+  // 2. 进入空间时，加载双方内容
   useEffect(() => {
-    if (!space) return;
-
-    const channel = supabase
-      .channel(`space_${space.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'spaces',
-        filter: `id=eq.${space.id}`
-      }, (payload) => {
-        setSpace(payload.new);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    if (space) {
+      const isUser1 = space.user_1 === user.id;
+      setMyContent(isUser1 ? (space.content_left || '') : (space.content_right || ''));
+      setPartnerContent(isUser1 ? (space.content_right || '') : (space.content_left || ''));
+    }
   }, [space?.id]);
 
   async function checkUserAndSpace() {
@@ -153,23 +144,58 @@ export default function App() {
     }
   }
 
-  // 7. 【新增】自动保存内容（输入后停顿0.5秒自动保存）
-  function handleContentChange(newContent) {
-    const isUser1 = space.user_1 === user.id;
-    const field = isUser1 ? 'content_left' : 'content_right';
+  // 7. 【新增】保存我的内容（只上传，不管对方）
+  async function handleSave() {
+    if (!space) return;
+    setSaving(true);
 
-    // 先更新本地显示
-    setSpace({ ...space, [field]: newContent });
+    try {
+      const isUser1 = space.user_1 === user.id;
+      const myField = isUser1 ? 'content_left' : 'content_right';
 
-    // 防抖保存：停止输入 500ms 后才真正写入数据库
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
       const { error } = await supabase
         .from('spaces')
-        .update({ [field]: newContent })
+        .update({ [myField]: myContent })
         .eq('id', space.id);
-      if (error) console.error('保存失败:', error);
-    }, 500);
+
+      if (error) {
+        alert('保存失败：' + error.message);
+      } else {
+        alert('✅ 保存成功！对方点刷新就能看到了。');
+      }
+    } catch (err) {
+      alert('保存出错：' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // 8. 【新增】刷新对方内容（只下载，不动我的）
+  async function handleRefresh() {
+    if (!space) return;
+    setRefreshing(true);
+
+    try {
+      const isUser1 = space.user_1 === user.id;
+      const partnerField = isUser1 ? 'content_right' : 'content_left';
+
+      const { data: latestSpace, error } = await supabase
+        .from('spaces')
+        .select('*')
+        .eq('id', space.id)
+        .single();
+
+      if (error) {
+        alert('刷新失败：' + error.message);
+      } else {
+        setPartnerContent(latestSpace[partnerField] || '');
+        setSpace(latestSpace);
+      }
+    } catch (err) {
+      alert('刷新出错：' + err.message);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   // 退出登录
@@ -177,6 +203,8 @@ export default function App() {
     await supabase.auth.signOut();
     setUser(null);
     setSpace(null);
+    setMyContent('');
+    setPartnerContent('');
   }
 
   if (loading) return <div style={{ padding: 20 }}>加载中...</div>;
@@ -233,12 +261,7 @@ export default function App() {
     );
   }
 
-  // 判断当前用户是左边还是右边
-  const isUser1 = space.user_1 === user.id;
-  const myContent = isUser1 ? (space.content_left || '') : (space.content_right || '');
-  const partnerContent = isUser1 ? (space.content_right || '') : (space.content_left || '');
-
-  // 界面 3：已绑定 - 左右分栏文档
+  // 界面 3：已绑定 - 左右分栏（保存和刷新分开）
   return (
     <div style={{ padding: 20, height: '100vh', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
@@ -259,22 +282,25 @@ export default function App() {
         </div>
       ) : null}
 
-      {/* 左右分栏文档区域 */}
+      {/* 左右分栏 */}
       <div style={{ display: 'flex', gap: '15px', flex: 1, minHeight: 0 }}>
-        {/* 左边：我的编辑区 */}
+        {/* 左边：我的编辑区 + 保存按钮 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             backgroundColor: '#e3f2fd',
             padding: '10px 15px',
             borderRadius: '8px 8px 0 0',
             fontWeight: 'bold',
-            color: '#1976d2'
+            color: '#1976d2',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            ✏️ 我的区域
+            <span>✏️ 我的区域</span>
           </div>
           <textarea
             value={myContent}
-            onChange={e => handleContentChange(e.target.value)}
+            onChange={e => setMyContent(e.target.value)}
             placeholder="在这里写下你想说的话..."
             style={{
               flex: 1,
@@ -282,25 +308,65 @@ export default function App() {
               fontSize: '16px',
               border: '2px solid #90caf9',
               borderTop: 'none',
-              borderRadius: '0 0 8px 8px',
+              borderRadius: 0,
               resize: 'none',
               outline: 'none',
               fontFamily: 'inherit',
               lineHeight: '1.6'
             }}
           />
+          <div style={{
+            border: '2px solid #90caf9',
+            borderTop: 'none',
+            borderRadius: '0 0 8px 8px',
+            padding: '10px',
+            textAlign: 'center',
+            backgroundColor: '#f5f9ff'
+          }}>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{
+                ...btnStyle,
+                backgroundColor: saving ? '#9e9e9e' : '#2196F3',
+                fontSize: '15px',
+                padding: '8px 24px'
+              }}
+            >
+              {saving ? '保存中...' : '💾 保存我的内容'}
+            </button>
+          </div>
         </div>
 
-        {/* 右边：对方的区域（只读） */}
+        {/* 右边：对方的区域 + 刷新按钮 */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             backgroundColor: '#fce4ec',
             padding: '10px 15px',
             borderRadius: '8px 8px 0 0',
             fontWeight: 'bold',
-            color: '#c2185b'
+            color: '#c2185b',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            💌 对方的区域
+            <span>💌 对方的区域</span>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              style={{
+                padding: '4px 12px',
+                backgroundColor: refreshing ? '#9e9e9e' : '#e91e63',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold'
+              }}
+            >
+              {refreshing ? '刷新中...' : '🔄 刷新'}
+            </button>
           </div>
           <div style={{
             flex: 1,
@@ -315,7 +381,7 @@ export default function App() {
             overflowY: 'auto',
             lineHeight: '1.6'
           }}>
-            {partnerContent || <span style={{ color: '#ccc' }}>对方还没有写内容...</span>}
+            {partnerContent || <span style={{ color: '#ccc' }}>对方还没有写内容，点右上角"刷新"看看...</span>}
           </div>
         </div>
       </div>
