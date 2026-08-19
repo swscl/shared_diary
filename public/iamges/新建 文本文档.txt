@@ -1,0 +1,4 @@
+login-bg.png       ← 登录页背景图
+    title.png          ← "星之田"标题贴图（如果画了的话）
+    btn-login.png      ← 登录按钮贴图
+    btn-register.png   ← 注册按钮贴图
