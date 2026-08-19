@@ -305,10 +305,10 @@ export default function App() {
         {/* 按钮贴图 */}
         <div style={styles.loginBtns}>
           <button onClick={() => handleAuth('login')} style={styles.loginBtn}>
-            <img src="/images/btn-login.png" alt="登录" style={styles.loginBtnImg} />
+            <img src="/images/btn_login.png" alt="登录" style={styles.loginBtnImg} />
           </button>
           <button onClick={() => handleAuth('signup')} style={styles.loginBtn}>
-            <img src="/images/btn-register.png" alt="注册" style={styles.loginBtnImg} />
+            <img src="/images/btn_register.png" alt="注册" style={styles.loginBtnImg} />
           </button>
         </div>
       </div>
@@ -458,7 +458,7 @@ const styles = {
   // ===== 登录页（手绘素材版） =====
   loginPage: {
     minHeight: '100vh',
-    backgroundImage: 'url(/images/login-bg.png)',
+    backgroundImage: 'url(/images/login_bg.png)',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
