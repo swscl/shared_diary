@@ -272,17 +272,44 @@ export default function App() {
 
   if (loading) return <div style={styles.loading}>加载中...</div>;
 
-  // ========== 页面1：登录页 ==========
+  // ========== 页面1：登录页（手绘素材版） ==========
   if (!user) {
     return (
-      <div style={styles.card}>
-        <h2 style={styles.loginTitle}>💕 心之田</h2>
-        <p style={styles.loginSubtitle}>两个人的共享小天地</p>
-        <input placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} style={styles.input} />
-        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} style={styles.input} />
-        <div style={{ display: 'flex', gap: 10, marginTop: 15 }}>
-          <button onClick={() => handleAuth('login')} style={styles.btnPrimary}>登录</button>
-          <button onClick={() => handleAuth('signup')} style={styles.btnSuccess}>注册</button>
+      <div style={styles.loginPage}>
+        {/* 标题贴图 */}
+        <img src="/images/title.png" alt="星之田" style={styles.loginTitleImg} />
+
+        {/* 账号输入 */}
+        <div style={styles.loginField}>
+          <span style={styles.loginLabel}>账号</span>
+          <input
+            placeholder="请输入邮箱"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={styles.loginInput}
+          />
+        </div>
+
+        {/* 密码输入 */}
+        <div style={styles.loginField}>
+          <span style={styles.loginLabel}>密码</span>
+          <input
+            type="password"
+            placeholder="请输入密码"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            style={styles.loginInput}
+          />
+        </div>
+
+        {/* 按钮贴图 */}
+        <div style={styles.loginBtns}>
+          <button onClick={() => handleAuth('login')} style={styles.loginBtn}>
+            <img src="/images/btn-login.png" alt="登录" style={styles.loginBtnImg} />
+          </button>
+          <button onClick={() => handleAuth('signup')} style={styles.loginBtn}>
+            <img src="/images/btn-register.png" alt="注册" style={styles.loginBtnImg} />
+          </button>
         </div>
       </div>
     );
@@ -428,6 +455,65 @@ export default function App() {
 
 // ==================== 样式 ====================
 const styles = {
+  // ===== 登录页（手绘素材版） =====
+  loginPage: {
+    minHeight: '100vh',
+    backgroundImage: 'url(/images/login-bg.png)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 30px',
+    boxSizing: 'border-box'
+  },
+  loginTitleImg: {
+    width: '70%',
+    maxWidth: 280,
+    marginBottom: 50
+  },
+  loginField: {
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 20,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 15
+  },
+  loginLabel: {
+    fontSize: 16,
+    color: '#8b7355',
+    fontWeight: 'bold',
+    width: 45,
+    flexShrink: 0
+  },
+  loginInput: {
+    flex: 1,
+    padding: '12px 15px',
+    border: '2px solid #d4b896',
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    outline: 'none',
+    fontFamily: 'inherit'
+  },
+  loginBtns: {
+    display: 'flex',
+    gap: 30,
+    marginTop: 40
+  },
+  loginBtn: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer'
+  },
+  loginBtnImg: {
+    width: 100,
+    height: 'auto'
+  },
   loading: { padding: 20, textAlign: 'center', marginTop: 50 },
   card: {
     maxWidth: 400, margin: '50px auto', padding: 30,
