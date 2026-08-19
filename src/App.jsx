@@ -527,7 +527,7 @@ const styles = {
   btnPrimary: { padding: '10px 20px', backgroundColor: '#ff69b4', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 15, flex: 1 },
   btnSuccess: { padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 15, flex: 1 },
   btnInfo: { padding: '10px 20px', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 'bold', fontSize: 15, width: '100%', marginTop: 8 },
-  divider: { borderTop: '1px solid #ffd6e8', paddingTop: 10, marginTop: 15 },
+  divider: { borderTop: '1px solid #ffd6e8', paddingTop: 8, marginTop: 15 },
   // 主页
   homePage: { maxWidth: 600, margin: '0 auto', minHeight: '100vh', background: '#fffafa', position: 'relative', paddingBottom: 80 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', background: 'linear-gradient(135deg, #ff69b4, #ff8fab)', position: 'sticky', top: 0, zIndex: 10 },
